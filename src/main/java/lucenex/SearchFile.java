@@ -1,6 +1,6 @@
 package lucenex;
 
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
@@ -17,11 +17,11 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 
 /**
- * This application search from a Lucene index in the specified directory
+ * Questo programma esegue una ricerca su un indice creato con TextFileIndexer
  */
 
 public class SearchFile {
-    private static final StandardAnalyzer analyzer = new StandardAnalyzer();
+    private static final EnglishAnalyzer analyzer = new EnglishAnalyzer();
 
     public static void main(String[] args) throws IOException {
         // Cartella dove è stato creato l'indice
@@ -38,17 +38,17 @@ public class SearchFile {
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         String s = "";
+        Long startTime, endTime;
+        Query q1, q2;
 
-        // Ciclo di ricerca fino a quando non viene inserita la stringa "q"
+        // Ciclo di ricerca. Termina quando viene inserita la stringa "q"
         while (!s.equalsIgnoreCase("q")) {
             try {
                 // collector viene inizializzato con il numero massimo di risultati da restituire
-                // si inizializza ogni ciclo per evitare problemi con i risultati di una ricerca precedente
-                collector = TopScoreDocCollector.create(5, 1000);
+                // si inizializza ogni ciclo per evitare problemi con i risultati della ricerca precedente
+                collector = TopScoreDocCollector.create(10, 1000);
 
                 System.out.println("Inserire la query di ricerca: (q per uscire):");
-                System.out.println("nome:{nomefile} per cercare un file");
-                System.out.println("contenuto:{frase} per cercare all'interno del documento");
                 s = br.readLine();
                 if (s.equalsIgnoreCase("q")) {
                     break;
@@ -57,20 +57,26 @@ public class SearchFile {
                 // Crea un oggetto QueryParser per la ricerca
                 // Il primo parametro è il campo su cui cercare
                 // Il secondo parametro è l'oggetto Analyzer
-                Query q = new QueryParser("contenuto", analyzer).parse(s);
+                q1 = new QueryParser("contenuto", analyzer).parse(s);
+                //q2 = new QueryParser("nome", analyzer).parse(s);
+
+                startTime = System.nanoTime();
 
                 // Esegue la ricerca ed i risultati vengono salvati in collector
-                searcher.search(q, collector);
+                searcher.search(q1, collector);
+                //searcher.search(q2, collector);
                 ScoreDoc[] hits = collector.topDocs().scoreDocs;
 
+                endTime = System.nanoTime();
                 // Stampa i risultati
-                System.out.println("Trovati " + collector.getTotalHits() + " hits.");
+                System.out.println("Trovati " + collector.getTotalHits() + " hits in "+ (endTime - startTime)/1000000 + " millisecondi.");
                 System.out.println("Primi "+ hits.length +" risultati in ordine di score:");
                 for (int i = 0; i < hits.length; ++i) {
                     int docId = hits[i].doc;
                     Document d = searcher.doc(docId);
                     System.out.println((i + 1) + ". " + d.get("path") + " score=" + hits[i].score);
                 }
+                System.out.println("");
 
             } catch (Exception e) {
                 System.out.println("Errore nella ricerca di " + s + " : " + e.getMessage());
