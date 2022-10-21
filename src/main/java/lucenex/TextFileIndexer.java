@@ -1,15 +1,18 @@
 package lucenex;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.core.StopAnalyzer;
+import org.apache.lucene.analysis.core.LetterTokenizerFactory;
+import org.apache.lucene.analysis.custom.CustomAnalyzer;
 import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper;
+import org.apache.lucene.analysis.pattern.PatternReplaceCharFilterFactory;
+import org.apache.lucene.codecs.simpletext.SimpleTextCodec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.*;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.store.FSDirectory;
 
 import java.io.*;
@@ -19,9 +22,6 @@ import java.util.*;
  * Questo programma crea un indice a partire da un insieme di file di testo
  */
 public class TextFileIndexer {
-    Map<String, Analyzer> perFieldAnalyzers = new HashMap<>();
-    //  CharSet per il nome dei file
-    CharArraySet stopWords = new CharArraySet(Arrays.asList("txt", "html"), true);
     private final IndexWriter writer;
     private final List<File> queue = new ArrayList<>();
 
@@ -32,19 +32,27 @@ public class TextFileIndexer {
      * @throws IOException se si verifica un errore di I/O.
      */
     TextFileIndexer(String indexDir) throws IOException {
+        Map<String, Analyzer> perFieldAnalyzers = new HashMap<>();
 
-        // Analyzer per il contenuto dei file
+        // Analyzer per il contenuto dei file di testo in lingua inglese
         perFieldAnalyzers.put("contenuto", new EnglishAnalyzer());
-        // Analyzer per il nome dei file
-        perFieldAnalyzers.put("nome", new StopAnalyzer(stopWords));
+
+        // Analyzer per il nome dei file con un filtro per rimuovere le estensioni
+        perFieldAnalyzers.put("nome", CustomAnalyzer.builder()
+                .withTokenizer(LetterTokenizerFactory.class)
+                .addCharFilter(PatternReplaceCharFilterFactory.class, "pattern", "\\.[^.]*$", "replacement", "")
+                .build());
+
+
         Analyzer analyzer = new PerFieldAnalyzerWrapper(new EnglishAnalyzer(), perFieldAnalyzers);
 
         FSDirectory dir = FSDirectory.open(new File(indexDir).toPath());
 
         IndexWriterConfig config = new IndexWriterConfig(analyzer);
-        //config.setCodec(new SimpleTextCodec());
+        config.setCodec(new SimpleTextCodec());
         writer = new IndexWriter(dir, config);
-        // cancella l'indice se già presente in indexDir
+
+        // cancella l'indice già presente in indexDir
         writer.deleteAll();
     }
 
@@ -115,7 +123,9 @@ public class TextFileIndexer {
                 System.out.println("Non può essere aggiunto: " + f);
                 System.out.println(e.getMessage());
             } finally {
-                fr.close();
+                if(fr != null) {
+                    fr.close();
+                }
             }
         }
         endTime = System.nanoTime();
@@ -136,7 +146,7 @@ public class TextFileIndexer {
             System.out.println(file + " non esiste.");
         }
         if (file.isDirectory()) {
-            for (File f : file.listFiles()) {
+            for (File f : Objects.requireNonNull(file.listFiles())) {
                 addFiles(f);
             }
         } else {
@@ -148,10 +158,6 @@ public class TextFileIndexer {
             if (filename.endsWith(".txt")) {
                 queue.add(file);
             }
-            /*
-            else {
-                System.out.println("Saltato " + filename);
-            }*/
         }
     }
 
